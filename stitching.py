@@ -3,16 +3,26 @@ import glob
 import numpy as np
 import warnings
 import matplotlib.pyplot as plt
-# import imageio
-# cv2.ocl.setUseOpenCL(False)
-# warnings.filterwarnings('ignore')
+
+
+# remove black background and create transparent image
+# https://www.geeksforgeeks.org/removing-black-background-and-make-transparent-using-python-opencv/#
+def transparent(img):
+    tmp = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    _, alpha = cv2.threshold(tmp, 0, 255, cv2.THRESH_BINARY)
+    b, g, r = cv2.split(img)
+    rgba = [b, g, r, alpha]
+    transparent_img = cv2.merge(rgba, 4)
+    return transparent_img
+
 
 # https://youtu.be/Zs51cg4mb0k?si=oYuz-0Z1Q-kY5sRT
-image_paths = glob.glob('images/training/*.JPG')#'*.png')
+image_paths = glob.glob('images/training/*.JPG')  # '*.png')
 images = []
 
 for image in image_paths:
     img = cv2.imread(image)
+    img = transparent(img)
     # cv2.imshow("original", img)
 
     # canny1 = cv2.Canny(img, 125, 175)
@@ -33,17 +43,11 @@ error, stitched = imageStitcher.stitch(images)
 
 if not error:
     # stitched = cv2.cvtColor(stitched, cv2.COLOR_RGB2BGRA)
-
-    # https://stackoverflow.com/questions/44595160/create-transparent-image-in-opencv-python
-    img_height, img_width = 300, 300
-    n_channels = 4
-    transparent_img = np.zeros((img_height, img_width, n_channels), dtype=np.uint8)
-
-    # Save the image for visualization
-    cv2.imwrite("./transparent_img.png", transparent_img)
-
-    cv2.imwrite("stitchedImg.png",stitched)
-    cv2.imshow("stitched",stitched)
+    transImg = transparent(stitched)
+    cv2.imwrite("stitchedImg.png", transImg)
+    cv2.imshow("stitched", transImg)
+    # img_height, img_width = stitched.shape[:2]
+    # print("height: ", img_height, ", width: ", img_width)
     cv2.waitKey(0)
 else:
     if error == 1:
