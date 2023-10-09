@@ -16,7 +16,7 @@ def transparent(img):
     return transparent_img
 
 
-def kpAndDescription(imgs, feature_extraction_algo):
+def kpAndDescriptor(imgs, feature_extraction_algo):
     kp_des_list = []
     for img in imgs:
         if feature_extraction_algo == "sift":
@@ -31,34 +31,6 @@ def kpAndDescription(imgs, feature_extraction_algo):
         (kp, des) = algo.detectAndCompute(img, None)
         kp_des_list.append((kp, des))
     return kp_des_list
-    # TODO: kp_des_list element NOT TUPLES. PLEASE FIX
-
-
-# https://pylessons.com/OpenCV-image-stiching
-# kpdes1, kpdes2 are tuples
-def match(kpdes1, kpdes2, method):
-    if method != "flann" or method != "bf":
-        print("invalid matching method")
-        return
-
-    matches = None
-    print("kpdes1"+kpdes1)
-    if method == "flann":
-        FLANN_INDEX_KDTREE = 0
-        index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
-        search_params = dict(checks=50)
-        match = cv2.FlannBasedMatcher(index_params, search_params)
-        matches = match.knnMatch(kpdes1[1], kpdes2[1], k=2)
-    elif method == "bf":
-        match = cv2.BFMatcher()
-        matches = match.knnMatch(kpdes1[1], kpdes2[1], k=2)
-
-    good = []
-    for m, n in matches:
-        if m.distance < 0.03 * n.distance:
-            good.append(m)
-
-    return good
 
 
 # https://youtu.be/uMABRY8QPe0?si=IkYtBlwBAJHBPMTM
@@ -67,23 +39,71 @@ def match(kpdes1, kpdes2, method):
 def manualStitch(imgs):
     gray_resized = []
     for img in imgs:
-        img1 = cv2.resize(img, (0,0), fx=.6, fy=1)  # size down image
+        img1 = cv2.resize(img, (0,0), fx=.5, fy=.5)  # size down image
         img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
         gray_resized.append(img1)
 
     feature_extraction_algo = "sift"
-    kp_des_list = kpAndDescription(imgs, feature_extraction_algo)
+    kp_des_list = kpAndDescriptor(gray_resized, feature_extraction_algo)
     match_method = "bf"
-    print(kp_des_list)
-    good = match(kp_des_list[0], kp_des_list[1], match_method)
+
+    # good = match(kp_des_list[0], kp_des_list[1], match_method)
+    # https://pylessons.com/OpenCV-image-stiching
+
+    if feature_extraction_algo == "flann":
+        FLANN_INDEX_KDTREE = 0
+        index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
+        search_params = dict(checks=50)
+        match = cv2.FlannBasedMatcher(index_params, search_params)
+    elif feature_extraction_algo == "bf":
+        match = cv2.BFMatcher()
+
+    matches = match.knnMatch(kp_des_list[0][1], kp_des_list[1][1], k=2)
+    # TODO this part needs fixing
+
+    good = []
+    for m, n in matches:
+        if m.distance < 0.03 * n.distance:
+            good.append(m)
 
     draw_params = dict(matchColor=(0, 255, 0),  # draw matches in green color
                        singlePointColor=None,
                        flags=2)
 
-    img3 = cv2.drawMatches(imgs[0], kp_des_list[0], imgs[1], kp_des_list[1], good, None, **draw_params)
-    cv2.imshow("original_image_drawMatches.jpg", img3)
-    cv2.waitKey(0)
+    img3 = cv2.drawMatches(gray_resized[0], kp_des_list[0][0], gray_resized[1], kp_des_list[1][0], good, None, **draw_params)
+
+    # MIN_MATCH_COUNT = 10
+    # if len(good) > MIN_MATCH_COUNT:
+    #     src_pts = np.float32([kp1[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
+    #     dst_pts = np.float32([kp2[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
+    #
+    #     M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+    #
+    #     h, w = img1.shape
+    #     pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
+    #     dst = cv2.perspectiveTransform(pts, M)
+    #
+    #     img2 = cv2.polylines(img2, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
+    #     cv2.imshow("original_image_overlapping.jpg", img2)
+    # else:
+    #     print("Not enough matches are found - %d/%d" % (len(good), MIN_MATCH_COUNT))
+
+
+def autoStitch(imgs):
+    imageStitcher = cv2.Stitcher.create()
+    error, stitched = imageStitcher.stitch(images)
+
+    if not error:
+        cv2.imwrite("stitchedImg.png", stitched)
+        cv2.imshow("stitched", stitched)
+        cv2.waitKey(0)
+    else:
+        if error == 1:
+            print("error: 1 ERR_NEED_MORE_IMGS")
+        elif error == 2:
+            print("error: 2 ERR_HOMOGRAPHY_EST_FAIL")
+        elif error == 3:
+            print("error: 3 ERR_CAMERA_PARAMS_ADJUST_FAIL")
 
 
 # https://youtu.be/Zs51cg4mb0k?si=oYuz-0Z1Q-kY5sRT
@@ -106,22 +126,5 @@ for image in image_paths:
     # cv2.waitKey(0)
     images.append(img)
 
-    # imageStitcher = cv2.Stitcher.create()
-    # error, stitched = imageStitcher.stitch(images)
-    manualStitch(images)
-
-# if not error:
-#     # stitched = cv2.cvtColor(stitched, cv2.COLOR_RGB2BGRA)
-#     cv2.imwrite("stitchedImg.png", stitched)
-#     cv2.imshow("stitched", stitched)
-#     # img_height, img_width = stitched.shape[:2]
-#     # print("height: ", img_height, ", width: ", img_width)
-#     cv2.waitKey(0)
-# else:
-#     if error == 1:
-#         print("error: 1 ERR_NEED_MORE_IMGS")
-#     elif error == 2:
-#         print("error: 2 ERR_HOMOGRAPHY_EST_FAIL")
-#     elif error == 3:
-#         print("error: 3 ERR_CAMERA_PARAMS_ADJUST_FAIL")
-
+manualStitch(images)
+# autoStitch(images)
