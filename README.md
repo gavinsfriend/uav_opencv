@@ -1,3 +1,3 @@
 # uav_opencv
 
-Image stitching with openCV Python
+Online aerial image stitching and feature detection on solar UAV with openCV
