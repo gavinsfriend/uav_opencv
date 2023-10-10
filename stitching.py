@@ -67,24 +67,26 @@ def manualStitch(img1, img2):
 
     MIN_MATCH_COUNT = 10
     if len(good) > MIN_MATCH_COUNT:
-        # TODO fix this part
-        src_pts = np.float32([kp_des1[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
-        dst_pts = np.float32([kp_des2[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
+        src_pts = np.float32([kp_des1[0][m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
+        dst_pts = np.float32([kp_des2[0][m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
 
         M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
 
-        h, w = img1.shape
+        h, w, l = img1.shape
         pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
         dst = cv2.perspectiveTransform(pts, M)
         pic = cv2.polylines(img2, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
-        cv2.imshow("original_image_overlapping.jpg", pic)
-        cv2.waitKey(0)
+        # cv2.imshow("original_image_overlapping.jpg", pic)
+        # cv2.waitKey(0)
     else:
         print("Not enough matches are found - %d/%d" % (len(good), MIN_MATCH_COUNT))
 
-    # dst = cv2.warpPerspective(img1, M, (img2.shape[1] + img1.shape[1], img2.shape[0]))
-    # dst[0:img2.shape[0], 0:img2.shape[1]] = img2
-    # cv2.imshow("original_image_stitched.jpg", dst)
+    dst = cv2.warpPerspective(img1, M, (img2.shape[1] + img1.shape[1], img2.shape[0]))
+    dst[0:img2.shape[0], 0:img2.shape[1]] = img2
+    cv2.imwrite("stitchedImg.png", dst)
+    cv2.imshow("original_image_stitched.jpg", dst)
+    cv2.waitKey(0)
+    return dst
 
 
 def trim(frame):
@@ -145,5 +147,5 @@ for image in image_paths:
     # cv2.waitKey(0)
     images.append(img)
 
-manualStitch(images[1], images[0])
+manualStitch(images[0], images[1])
 # autoStitch(images)
