@@ -10,6 +10,7 @@
 import cv2 as cv
 import glob
 import numpy as np
+import scipy as sp
 from PIL import Image, ExifTags
 # from exif import Image
 from operator import sub
@@ -59,11 +60,10 @@ class ImgObj:
     def __init__(self, path):
         self.path = path
         temp = cv.imread(path)
-        self.image = cv.resize(temp, (0, 0), fx=.52, fy=.52)    # size down
+        # temp = cv.resize(temp, (0, 0), fx=.7, fy=.7)   # size down
+        self.image = temp
         self.gpsInfo = self.get_GPS(path)
         self.lat_long = self.gps_to_dds(self.gpsInfo)
-        # cv.imshow("img", self.image)
-        # cv.waitKey(0)
 
 
 def process_all(originals):
@@ -83,10 +83,24 @@ def read_and_create_objs(paths):
     return imgObjs
 
 
-def geo_sort(imgObjs):
-    imgObjs = np.array(imgObjs)
+def distance(imgObj1: ImgObj, imgObj2: ImgObj):
+    latLong1 = imgObj1.lat_long
+    latLong2 = imgObj2.lat_long
+    dis = np.sqrt((latLong1[0] - latLong2[0])**2 + (latLong1[1] - latLong2[1])**2)
+    return dis
 
-    imgObjs = sorted(imgObjs, reverse=True, key=lambda l: l.lat_long[1])
+
+def geo_sort(imgObjs):
+    # imgObjs = np.array(imgObjs)
+
+    # sort according to longitude
+    # imgObjs = sorted(imgObjs, reverse=True, key=lambda l: l.lat_long[1])
+
+    # sort according to distance to the first image, stitching closer images together first
+    head = imgObjs[0:1]
+    rest = sorted(imgObjs[1:], reverse=False, key=lambda l: distance(imgObjs[0], l))
+    imgObjs = head + rest
+
     return imgObjs
 
 
@@ -236,8 +250,8 @@ def manualStitch(img1, img2):
 
     feature_extraction_algo = "sift"        # sift, surf, brisk, orb
     match_method = "bf"                     # flann, bf
-    processed1 = process_single(img1)
-    processed2 = cv.resize()
+    processed1 = cv.resize(img1, (0, 0), fx=.6, fy=.6)
+    processed2 = cv.resize(img2, (0, 0), fx=.6, fy=.6)
     kp_des1 = kpAndDescriptor(processed1, feature_extraction_algo)
     kp_des2 = kpAndDescriptor(processed2, feature_extraction_algo)
 
@@ -311,7 +325,7 @@ def autoStitch(imgs):
 def main():
     image_paths = glob.glob('images/training/*.JPG')  # '*.png')
     img_objs = read_and_create_objs(image_paths)
-    # geo_sort(img_objs)
+    geo_sort(img_objs)
     # processed = process_all(originals)
 
     # manualStitch(images[1], images[0])

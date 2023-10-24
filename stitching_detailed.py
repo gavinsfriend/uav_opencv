@@ -215,7 +215,7 @@ parser.add_argument(
     type=np.int32, dest='blend_strength'
 )
 parser.add_argument(
-    '--output', action='store', default='result.JPG',
+    '--output', action='store', default='stitchedImg.JPG',
     help="The default is 'result.jpg'",
     type=str, dest='output'
 )
@@ -244,6 +244,7 @@ def get_matcher(args):
             match_conf = 0.65
     else:
         match_conf = args.match_conf
+
     range_width = args.rangewidth
     if matcher_type == "affine":
         matcher = cv.detail_AffineBestOf2NearestMatcher(False, try_cuda, match_conf)
@@ -336,7 +337,10 @@ def main():
         img_feat = cv.detail.computeImageFeatures2(finder, img)
         features.append(img_feat)
         img = cv.resize(src=imgObj.image, dsize=None, fx=seam_scale, fy=seam_scale, interpolation=cv.INTER_LINEAR_EXACT)
-        images.append(img)
+        imgObj.image = img
+        images.append(imgObj)
+
+    images = geo_sort(images)
 
     matcher = get_matcher(args)
     p = matcher.apply2(features)
@@ -409,7 +413,7 @@ def main():
     sizes = []
     masks = []
     for i in range(0, num_images):
-        um = cv.UMat(255 * np.ones((images[i].shape[0], images[i].shape[1]), np.uint8))
+        um = cv.UMat(255 * np.ones((images[i].image.shape[0], images[i].image.shape[1]), np.uint8))
         masks.append(um)
 
     warper = cv.PyRotationWarper(warp_type, warped_image_scale * seam_work_aspect)  # warper could be nullptr?
@@ -420,7 +424,7 @@ def main():
         K[0, 2] *= swa
         K[1, 1] *= swa
         K[1, 2] *= swa
-        corner, image_wp = warper.warp(images[idx], K, cameras[idx].R, cv.INTER_LINEAR, cv.BORDER_REFLECT)
+        corner, image_wp = warper.warp(images[idx].image, K, cameras[idx].R, cv.INTER_LINEAR, cv.BORDER_REFLECT)
         corners.append(corner)
         sizes.append((image_wp.shape[1], image_wp.shape[0]))
         images_warped.append(image_wp)
