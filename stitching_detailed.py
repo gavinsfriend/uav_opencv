@@ -513,6 +513,7 @@ def main():
         result = None
         result_mask = None
         result, result_mask = blender.blend(result, result_mask)
+        result = cv.resize(result, (0, 0), fx=.75, fy=.75)      # size down
         cv.imwrite(result_name, result)
         zoom_x = 600.0 / result.shape[1]
         dst = cv.normalize(src=result, dst=None, alpha=255., norm_type=cv.NORM_MINMAX, dtype=cv.CV_8U)

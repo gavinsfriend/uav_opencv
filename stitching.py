@@ -60,7 +60,7 @@ class ImgObj:
     def __init__(self, path):
         self.path = path
         temp = cv.imread(path)
-        # temp = cv.resize(temp, (0, 0), fx=.7, fy=.7)   # size down
+        temp = cv.resize(temp, (0, 0), fx=.3, fy=.3)   # size down
         self.image = temp
         self.gpsInfo = self.get_GPS(path)
         self.lat_long = self.gps_to_dds(self.gpsInfo)
@@ -69,7 +69,7 @@ class ImgObj:
 def process_all(originals):
     imgs = []
     for img in originals:
-        temp = cv.resize(img, (0, 0), fx=.7, fy=.7)  # size down image
+        temp = cv.resize(img, (0, 0), fx=.4, fy=.4)  # size down image
         # temp = cv.cvtColor(temp, cv.COLOR_BGR2GRAY)
         imgs.append(temp)
     return imgs
@@ -93,13 +93,17 @@ def distance(imgObj1: ImgObj, imgObj2: ImgObj):
 def geo_sort(imgObjs):
     # imgObjs = np.array(imgObjs)
 
-    # sort according to longitude
+    # sort by longitude
     # imgObjs = sorted(imgObjs, reverse=True, key=lambda l: l.lat_long[1])
+    print(imgObjs)
 
-    # sort according to distance to the first image, stitching closer images together first
+    # sort by distance to the first image, stitching closer images together first
     head = imgObjs[0:1]
     rest = sorted(imgObjs[1:], reverse=False, key=lambda l: distance(imgObjs[0], l))
     imgObjs = head + rest
+    print("after:")
+    for i in imgObjs:
+        print(i.lat_long, " dist: ", distance(imgObjs[0], i))
 
     return imgObjs
 
@@ -326,7 +330,9 @@ def main():
     image_paths = glob.glob('images/training/*.JPG')  # '*.png')
     img_objs = read_and_create_objs(image_paths)
     geo_sort(img_objs)
+    # img_objs[0] = img_objs[0]
     # processed = process_all(originals)
+
 
     # manualStitch(images[1], images[0])
     # autoStitch(processed)
