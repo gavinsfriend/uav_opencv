@@ -8,6 +8,11 @@ Show how to use Stitcher API from python.
 
 # Python 2/3 compatibility
 from __future__ import print_function
+
+import pickle
+
+import piexif
+
 from stitching import *
 import argparse
 from collections import OrderedDict
@@ -29,8 +34,8 @@ BA_COST_CHOICES['no'] = cv.detail_NoBundleAdjuster
 
 FEATURES_FIND_CHOICES = OrderedDict()
 try:
-    cv.xfeatures2d_SURF.create() # check if the function can be called
-    FEATURES_FIND_CHOICES['surf'] = cv.xfeatures2d_SURF.create
+    cv.SURF_create # check if the function can be called
+    FEATURES_FIND_CHOICES['surf'] = cv.SURF_create      #cv.xfeatures2d_SURF.create
 except (AttributeError, cv.error) as e:
     print("SURF not available")
 # if SURF not available, ORB is default
@@ -274,7 +279,7 @@ def get_compensator(args):
     return compensator
 
 
-def main():
+def stitch():
     args = parser.parse_args()
     img_names = args.img_names
     print(img_names)
@@ -311,6 +316,7 @@ def main():
     is_work_scale_set = False
     is_seam_scale_set = False
     is_compose_scale_set = False
+
     for name in img_names:
         imgObj = ImgObj(name)
         # full_img = cv.imread(cv.samples.findFile(name))
@@ -340,7 +346,7 @@ def main():
         imgObj.image = img
         images.append(imgObj)
 
-    images = geo_sort(images)
+    # images = geo_sort(images)
 
     matcher = get_matcher(args)
     p = matcher.apply2(features)
@@ -410,6 +416,7 @@ def main():
     corners = []
     masks_warped = []
     images_warped = []
+    imgObj_used = []
     sizes = []
     masks = []
     for i in range(0, num_images):
@@ -426,6 +433,7 @@ def main():
         K[1, 2] *= swa
         corner, image_wp = warper.warp(images[idx].image, K, cameras[idx].R, cv.INTER_LINEAR, cv.BORDER_REFLECT)
         corners.append(corner)
+        imgObj_used.append(images[idx])     # keep track of images used in the stitching process
         sizes.append((image_wp.shape[1], image_wp.shape[0]))
         images_warped.append(image_wp)
         p, mask_wp = warper.warp(masks[idx], K, cameras[idx].R, cv.INTER_NEAREST, cv.BORDER_CONSTANT)
@@ -446,7 +454,7 @@ def main():
     sizes = []
     blender = None
     timelapser = None
-    # https://github.com/opencv/opencv/blob/4.x/samples/cpp/stitching_detailed.cpp#L725 ?
+
     for idx, name in enumerate(img_names):
         imgObj = ImgObj(name)
         # full_img = cv.imread(name)
@@ -513,18 +521,28 @@ def main():
         result = None
         result_mask = None
         result, result_mask = blender.blend(result, result_mask)
-        result = cv.resize(result, (0, 0), fx=.75, fy=.75)      # size down
-        cv.imwrite(result_name, result)
+        result = cv.resize(result, (0, 0), fx=.55, fy=.55)      # size down
+        try:
+            cv.imwrite(result_name, result)
+        except:
+            print("Error: cannot write image")
+            return None
+        resultObj = ImgObj(result_name)
         zoom_x = 600.0 / result.shape[1]
         dst = cv.normalize(src=result, dst=None, alpha=255., norm_type=cv.NORM_MINMAX, dtype=cv.CV_8U)
         dst = cv.resize(dst, dsize=None, fx=zoom_x, fy=zoom_x)
         cv.imshow(result_name, dst)
+        print("final stitched image size: ", format_bytes(os.path.getsize(result_name)))
         cv.waitKey()
 
     print("Done")
+    return resultObj, result_name, imgObj_used
 
 
 if __name__ == '__main__':
-    main()
+    stitched, outFile, usedImgs = stitch()
+    pos = create_gps(usedImgs)
+    stitched.set_GPS(pos)
+
     cv.destroyAllWindows()
 
