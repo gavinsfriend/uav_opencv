@@ -9,10 +9,11 @@
 # https://stackoverflow.com/questions/64659657/fast-and-robust-image-stitching-algorithm-for-many-images-in-python
 import cv2 as cv
 import numpy as np
-import scipy as sp
+from stitching_detailed import *
 from PIL import Image, ExifTags
+from collections import OrderedDict
 from operator import sub
-import piexif, os, pickle, glob
+import glob
 
 
 class ImgObj:
@@ -67,7 +68,7 @@ class ImgObj:
 
 
 # create gps data for newly stitched images
-def create_gps(imgObjs):
+def create_GPS(imgObjs):
     left = min(imgObjs, key=lambda l: l.lat_long[1]).lat_long[1]
     right = max(imgObjs, key=lambda l: l.lat_long[1]).lat_long[1]
     top = max(imgObjs, key=lambda l: l.lat_long[0]).lat_long[0]
@@ -129,6 +130,7 @@ def read_and_create_objs(paths):
         imgObjs.append(img_obj)
     return imgObjs
 
+
 def autoStitch(imgs):
     imageStitcher = cv.Stitcher.create()
     error, stitched = imageStitcher.stitch(imgs)
@@ -147,12 +149,31 @@ def autoStitch(imgs):
             print("error: 3 ERR_CAMERA_PARAMS_ADJUST_FAIL")
 
 
-def main():
-    image_paths = glob.glob('images/training/*.JPG')  # '*.png')
-
-
-    # manualStitch(images[1], images[0])
-    # autoStitch(processed)
-
 if __name__ == '__main__':
-    main()
+    image_paths = glob.glob('images/training/*.JPG')  # '*.png')
+    feature = ("akaze")
+    conf_thresh = None
+    match_conf = None
+    match feature:  # initial params
+        case "orb":
+            feature = 0
+            conf_thresh = 0.15
+            match_conf = 0.3
+        case "sift":
+            feature = 1
+            conf_thresh = 0.15
+            match_conf = 0.65
+        case "brisk":
+            feature = 2
+            conf_thresh = 0.38
+            match_conf = 0.6
+        case "akaze":
+            feature = 3
+            conf_thresh = 0.15
+            match_conf = 0.65
+
+    resultObj, resultName, imgsUsed = stitch(image_paths, conf_thresh=conf_thresh, match_conf=match_conf, ft=feature)
+
+    print("new coordinates", resultObj.lat_long)
+
+    cv.destroyAllWindows()

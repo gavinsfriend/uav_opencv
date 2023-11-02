@@ -7,9 +7,9 @@ Show how to use Stitcher API from python.
 """
 # Python 2/3 compatibility
 from __future__ import print_function
+from stitching import *
+import argparse
 from collections import OrderedDict
-import stitching
-import argparse, os
 import cv2 as cv
 import numpy as np
 
@@ -233,18 +233,18 @@ parser.add_argument(
 __doc__ += '\n' + parser.format_help()
 
 
-def get_matcher(match_conf):
-    try_cuda = False
-    matcher_type = "homography" # or "affine"
-    # if args.match_conf is None:
-    #     if args.features == 'orb':
-    #         match_conf = 0.3
-    #     else:
-    #         match_conf = 0.65
-    # else:
-    #     match_conf = args.match_conf
-    #
-    range_width = -1
+def get_matcher(args):
+    try_cuda = args.try_cuda
+    matcher_type = args.matcher
+    if args.match_conf is None:
+        if args.features == 'orb':
+            match_conf = 0.3
+        else:
+            match_conf = 0.65
+    else:
+        match_conf = args.match_conf
+
+    range_width = args.rangewidth
     if matcher_type == "affine":
         matcher = cv.detail_AffineBestOf2NearestMatcher(False, try_cuda, match_conf)
     elif range_width == -1:
@@ -254,10 +254,10 @@ def get_matcher(match_conf):
     return matcher
 
 
-def get_compensator():
-    expos_comp_type = EXPOS_COMP_CHOICES[list(EXPOS_COMP_CHOICES.keys())[0]]
-    expos_comp_nr_feeds = 1
-    expos_comp_block_size = 32
+def get_compensator(args):
+    expos_comp_type = EXPOS_COMP_CHOICES[args.expos_comp]
+    expos_comp_nr_feeds = args.expos_comp_nr_feeds
+    expos_comp_block_size = args.expos_comp_block_size
     # expos_comp_nr_filtering = args.expos_comp_nr_filtering
     if expos_comp_type == cv.detail.ExposureCompensator_CHANNELS:
         compensator = cv.detail_ChannelsCompensator(expos_comp_nr_feeds)
@@ -273,35 +273,36 @@ def get_compensator():
     return compensator
 
 
-def stitch(img_names, conf_thresh, match_conf, ft: int):
-    # args = parser.parse_args()
-    # img_names = args.img_names
+def stitch():
+    args = parser.parse_args()
+    img_names = args.img_names
     print(img_names)
-    work_megapix = 0.6 # args.work_megapix
-    seam_megapix = 0.1 # args.seam_megapix
-    compose_megapix = -1 # args.compose_megapix
-    # conf_thresh = args.conf_thresh
-    ba_refine_mask = 'xxxxx' # args.ba_refine_mask
-    wave_correct = WAVE_CORRECT_CHOICES[list(WAVE_CORRECT_CHOICES.keys())[0]]
-    save_graph = True
-    warp_type = WARP_CHOICES[0]
-    blend_type = BLEND_CHOICES[0]
-    blend_strength = 5
-    result_name = "stitchedImg.JPG"
-
-    timelapse_mode = None
-    if timelapse_mode is not None:
+    work_megapix = args.work_megapix
+    seam_megapix = args.seam_megapix
+    compose_megapix = args.compose_megapix
+    conf_thresh = args.conf_thresh
+    ba_refine_mask = args.ba_refine_mask
+    wave_correct = WAVE_CORRECT_CHOICES[args.wave_correct]
+    if args.save_graph is None:
+        save_graph = False
+    else:
+        save_graph = True
+    warp_type = args.warp
+    blend_type = args.blend
+    blend_strength = args.blend_strength
+    result_name = args.output
+    if args.timelapse is not None:
         timelapse = True
-        if timelapse_mode == "as_is":
+        if args.timelapse == "as_is":
             timelapse_type = cv.detail.Timelapser_AS_IS
-        elif timelapse_mode == "crop":
+        elif args.timelapse == "crop":
             timelapse_type = cv.detail.Timelapser_CROP
         else:
             print("Bad timelapse method")
             exit()
     else:
         timelapse = False
-    finder = FEATURES_FIND_CHOICES[list(FEATURES_FIND_CHOICES.keys())[ft]]()
+    finder = FEATURES_FIND_CHOICES[args.features]()
     seam_work_aspect = 1
     full_img_sizes = []
     features = []
@@ -311,7 +312,7 @@ def stitch(img_names, conf_thresh, match_conf, ft: int):
     is_compose_scale_set = False
 
     for name in img_names:
-        imgObj = stitching.ImgObj(name)
+        imgObj = ImgObj(name)
         # full_img = cv.imread(cv.samples.findFile(name))
         if imgObj is None:
             print("Cannot read image ", name)
@@ -339,15 +340,15 @@ def stitch(img_names, conf_thresh, match_conf, ft: int):
         imgObj.image = img
         images.append(imgObj)
 
-    images = stitching.geo_sort(images)
+    # images = geo_sort(images)
 
-    matcher = get_matcher(match_conf)
+    matcher = get_matcher(args)
     p = matcher.apply2(features)
     matcher.collectGarbage()
 
-    # if save_graph:
-    #     with open(args.save_graph, 'w') as fh:
-    #         fh.write(cv.detail.matchesGraphAsString(img_names, p, conf_thresh))
+    if save_graph:
+        with open(args.save_graph, 'w') as fh:
+            fh.write(cv.detail.matchesGraphAsString(img_names, p, conf_thresh))
 
     indices = cv.detail.leaveBiggestComponent(features, p, conf_thresh)
     img_subset = []
@@ -365,7 +366,7 @@ def stitch(img_names, conf_thresh, match_conf, ft: int):
         print("Need more images")
         exit()
 
-    estimator = ESTIMATOR_CHOICES[list(ESTIMATOR_CHOICES.keys())[0]]()
+    estimator = ESTIMATOR_CHOICES[args.estimator]()
     b, cameras = estimator.apply(features, p, None)
     if not b:
         print("Homography estimation failed.")
@@ -373,7 +374,7 @@ def stitch(img_names, conf_thresh, match_conf, ft: int):
     for cam in cameras:
         cam.R = cam.R.astype(np.float32)
 
-    adjuster = BA_COST_CHOICES[list(BA_COST_CHOICES.keys())[0]]()
+    adjuster = BA_COST_CHOICES[args.ba]()
     adjuster.setConfThresh(conf_thresh)
     refine_mask = np.zeros((3, 3), np.uint8)
     if ba_refine_mask[0] == 'x':
@@ -437,10 +438,10 @@ def stitch(img_names, conf_thresh, match_conf, ft: int):
         imgf = img.astype(np.float32)
         images_warped_f.append(imgf)
 
-    compensator = get_compensator()
+    compensator = get_compensator(args)
     compensator.feed(corners=corners, images=images_warped, masks=masks_warped)
 
-    seam_finder = SEAM_FIND_CHOICES[list(SEAM_FIND_CHOICES.keys())[0]]
+    seam_finder = SEAM_FIND_CHOICES[args.seam]
     masks_warped = seam_finder.find(images_warped_f, corners, masks_warped)
     compose_scale = 1
     corners = []
@@ -449,7 +450,7 @@ def stitch(img_names, conf_thresh, match_conf, ft: int):
     timelapser = None
 
     for idx, name in enumerate(img_names):
-        imgObj = stitching.ImgObj(name)
+        imgObj = ImgObj(name)
         # full_img = cv.imread(name)
         if not is_compose_scale_set:
             if compose_megapix > 0:
@@ -520,13 +521,12 @@ def stitch(img_names, conf_thresh, match_conf, ft: int):
         except:
             print("Error: cannot write image")
             return None
-        resultObj = stitching.ImgObj(result_name)
-        resultObj.set_GPS(stitching.create_GPS(imgObj_used))
+        resultObj = ImgObj(result_name)
         zoom_x = 600.0 / result.shape[1]
         dst = cv.normalize(src=result, dst=None, alpha=255., norm_type=cv.NORM_MINMAX, dtype=cv.CV_8U)
         dst = cv.resize(dst, dsize=None, fx=zoom_x, fy=zoom_x)
         cv.imshow(result_name, dst)
-        print("final stitched image size: ", stitching.format_bytes(os.path.getsize(result_name)))
+        print("final stitched image size: ", format_bytes(os.path.getsize(result_name)))
         cv.waitKey()
 
     print("Done")
