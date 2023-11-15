@@ -514,14 +514,15 @@ def stitch(img_names, conf_thresh, match_conf, ft: int):
         result = None
         result_mask = None
         result, result_mask = blender.blend(result, result_mask)
-        result = cv.resize(result, (0, 0), fx=.55, fy=.55)      # size down
+        result = cv.resize(result, (0, 0), fx=.85, fy=.85)      # size down
         try:
             cv.imwrite(result_name, result)
+            resultObj = stitching.ImgObj(result_name)
+            pos, lat_long = stitching.create_gps(imgObj_used)
+            stitching.modify_exif(resultObj, lat_long=lat_long, pos=pos)
         except:
             print("Error: cannot write image")
             return None
-        resultObj = stitching.ImgObj(result_name)
-        resultObj.set_GPS(stitching.create_GPS(imgObj_used))
         zoom_x = 600.0 / result.shape[1]
         dst = cv.normalize(src=result, dst=None, alpha=255., norm_type=cv.NORM_MINMAX, dtype=cv.CV_8U)
         dst = cv.resize(dst, dsize=None, fx=zoom_x, fy=zoom_x)
