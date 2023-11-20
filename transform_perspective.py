@@ -1,20 +1,7 @@
 import cv2
 import numpy as np
 
-# Initialize transformation values (depends on the dimensions of the image)
-rotXval = -45
-rotYval = 0
-rotZval = 0
-distXval = 0
-distYval = -2500
-distZval = -2000
-
-if __name__ == '__main__':
-
-    # Read input image, and create output image
-    src = cv2.imread("./images/test_1.jpg")
-    dst = np.zeros_like(src)
-    h, w = src.shape[:2]
+def simulate(src, dst, w, h, rotXval, rotYval, rotZval, distXval, distYval, distZval):
 
     # Initialize transformations
     f = (max(w, h)/2) / np.tan(np.pi*45/180)    # assumption: FOV = 90
@@ -66,6 +53,4 @@ if __name__ == '__main__':
     # Apply matrix transformation
     cv2.warpPerspective(src, H, (w, h), dst, cv2.INTER_NEAREST, cv2.BORDER_CONSTANT, 0)
 
-    # Save the warped image
-    cv2.imwrite("./images/test_1_warped.jpg", dst)
-
+    return dst
