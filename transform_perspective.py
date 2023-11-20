@@ -1,8 +1,7 @@
 import cv2
 import numpy as np
 
-# Initialize transformation values
-f = 5000
+# Initialize transformation values (depends on the dimensions of the image)
 rotXval = -45
 rotYval = 0
 rotZval = 0
@@ -18,6 +17,7 @@ if __name__ == '__main__':
     h, w = src.shape[:2]
 
     # Initialize transformations
+    f = (max(w, h)/2) / np.tan(np.pi*45/180)    # assumption: FOV = 90
     rotX = rotXval*np.pi/180
     rotY = rotYval*np.pi/180
     rotZ = rotZval*np.pi/180
