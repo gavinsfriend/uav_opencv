@@ -1,8 +1,15 @@
 import cv2
 import numpy as np
 
-def simulate(src, dst, w, h, rotXval, rotYval, rotZval, distXval, distYval, distZval):
+# https://stackoverflow.com/questions/45811421/python-create-image-with-new-camera-position
+def simulate(src, rotXval, rotYval, rotZval, distXval, distYval, distZval):
 
+    # Initalize destination of transformation
+    dst = np.zeros_like(src)
+    
+    # Initialize height and width
+    h, w = src.shape[:2]
+    
     # Initialize transformations
     f = (max(w, h)/2) / np.tan(np.pi*45/180)    # assumption: FOV = 90
     rotX = rotXval*np.pi/180
