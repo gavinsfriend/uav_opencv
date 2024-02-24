@@ -1,0 +1,19 @@
+[orb]
+feature = 0
+conf_thresh = 0.15
+match_conf = 0.3
+
+[sift]
+feature = 1
+conf_thresh = 0.2
+match_conf = 0.6
+
+[brisk]
+feature = 2
+conf_thresh = 0.2
+match_conf = 0.6
+
+[akaze]
+feature = 3
+conf_thresh = 0.2
+match_conf = 0.7

@@ -7,11 +7,24 @@
 # https://youtu.be/Zs51cg4mb0k?si=oYuz-0Z1Q-kY5sRT
 # https://www.geeksforgeeks.org/python-opencv-object-tracking-using-homography/#
 # https://stackoverflow.com/questions/64659657/fast-and-robust-image-stitching-algorithm-for-many-images-in-python
-import pickle, piexif, glob
+# https://support.pix4d.com/hc/en-us/articles/202560249-TOOLS-GSD-calculator
+# https://gis.stackexchange.com/questions/340301/determining-longitude-and-latitude-of-each-corner-of-image
+# https://youtu.be/HaGj0DjX8W8?si=Thlcu7J_n2KDM3ud
+import pickle, piexif, glob, cProfile, tomllib
 import cv2 as cv
 import numpy as np
 import stitching_detailed
 from PIL import Image, ExifTags
+# DJI FC3170: Mavic Air 2
+# sensor size: 1/2" CMOS, 6.4 x 4.8 mm
+# focal length: 24 mm
+
+# image width: 8000, actual distance of width: ~700ft
+# GSD = 0.00501    m/pixel or .501 cm/pix
+# widthOffset = GSD * (8000/2)    # meters
+# heightOffset = GSD * (6000/2)
+# widthDis = 97   # m
+# wOffset = 0.04090841289
 
 
 class ImgObj:
@@ -25,6 +38,18 @@ class ImgObj:
                 if k in ExifTags.TAGS
             }
             return exif["GPSInfo"]
+        except:
+            return None
+
+    def info_dump(self):
+        img = Image.open(self.path)
+        try:
+            exif = {
+                ExifTags.TAGS[k]: v
+                for k, v in img._getexif().items()
+                if k in ExifTags.TAGS
+            }
+            return exif
         except:
             return None
 
@@ -50,14 +75,16 @@ class ImgObj:
         self.image = temp
         self.size = temp.shape[:2]
         self.gpsInfo = self.get_GPS()
-        if self.gpsInfo is not None:
+        if self.gpsInfo is not None:    # image has embedded GPS info
             self.lat_long = self.gps_to_dds(self.gpsInfo)
+            self.alt = self.gpsInfo[6]
         else:
             try:
                 pos, lat_long = read_exif(path)
                 self.lat_long = lat_long
                 self.pos = pos
             except:
+                pass
                 print("file does not contain exif data")
 
 
@@ -68,7 +95,9 @@ def create_gps(imgObjs):
     top = max(imgObjs, key=lambda l: l.lat_long[0]).lat_long[0]
     bottom = min(imgObjs, key=lambda l: l.lat_long[0]).lat_long[0]
     lat, long = (top+bottom)/2, (left+right)/2
-    pos = (left, right, top, bottom)
+    # sum_alt = sum(imgObjs, key=lambda l: l.alt)
+    # print(sum_alt)
+    pos = (left, right, bottom, top)
     lat_long = lat, long
     return pos, lat_long
 
@@ -80,11 +109,27 @@ def read_exif(path):
     exif_dict = img.info.get("exif")  # returns None if exif key does not exist
     if exif_dict:
         exif_data = piexif.load(exif_dict)
-        raw = exif_data['Exif'][piexif.ExifIFD.UserComment]
+        raw = exif_data['Exif'][piexif.ExifIFD.UserComment]     # custom data is stored in UserComment
         tags = pickle.loads(raw)
         pos = tags.get("pos")
         lat_long = tags.get("lat_long")
         return pos, lat_long
+
+
+# TODO: extract makers note
+def read_makersNote(path):
+    img = Image.open(path)
+    exif_dict = img.info.get("exif")  # returns None if exif key does not exist
+    if exif_dict:
+        exif_data = piexif.load(exif_dict)
+        raw = exif_data['Exif'][piexif.ExifIFD.MakerNote]
+        newlist = []
+        print(raw)
+        for i in raw:
+            print(i)
+            tag = pickle.loads(i)
+            newlist.append(tag)
+        return newlist
 
 
 # modify exif data of an image
@@ -95,7 +140,7 @@ def modify_exif(imgObj: ImgObj, lat_long, pos=None):
     exif_dict = {"0th": {}, "Exif": exif_ifd, "1st": {}, "thumbnail": None, "GPS": {}}
     exif_dat = piexif.dump(exif_dict)
     img = Image.open(imgObj.path)
-    img.save(imgObj.path, exif= exif_dat)
+    img.save(imgObj.path, exif=exif_dat)
     imgObj.lat_long = lat_long
     imgObj.pos = pos
 
@@ -144,30 +189,27 @@ def read_and_create_objs(paths):
     return imgObjs
 
 
-if __name__ == '__main__':
-    image_paths = glob.glob('images/training/*.*')
-    image_paths = sorted(image_paths)
-    feature = "brisk"
+def stitch(feature):
+    image_paths = glob.glob('../training/*.*')
+    # image_paths = sorted(image_paths)
 
-    match feature:  # initial params
-        case "orb":
-            feature = 0
-            conf_thresh = 0.15
-            match_conf = 0.3
-        case "sift":
-            feature = 1
-            conf_thresh = 0.1
-            match_conf = 0.6
-        case "brisk":
-            feature = 2
-            conf_thresh = 0.05
-            match_conf = 0.65
-        case "akaze":
-            feature = 3
-            conf_thresh = 0.35
-            match_conf = 0.85
+    # configure initial params
+    with open("config.toml", "rb") as f:
+        data = tomllib.load(f)
+    ft = data[feature]["feature"]
+    conf_thresh = data[feature]["conf_thresh"]
+    match_conf = data[feature]["match_conf"]
 
-    resultObj, resultName, imgsUsed = stitching_detailed.stitch(image_paths, conf_thresh=conf_thresh, match_conf=match_conf, ft=feature)
+    try:
+        resultObj, resultName, imgsUsed = stitching_detailed.stitch(image_paths, conf_thresh=conf_thresh,
+                                                                match_conf=match_conf, ft=ft)
+        print("new coordinates", resultObj.lat_long, resultObj.pos)
+        return resultObj, resultName, imgsUsed
+    except:
+        print("stitching failed")
 
-    print("new coordinates", resultObj.lat_long, resultObj.pos)
     cv.destroyAllWindows()
+
+
+if __name__ == '__main__':
+    cProfile.run('stitch("sift")')
