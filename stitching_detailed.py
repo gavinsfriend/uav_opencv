@@ -8,7 +8,7 @@ Show how to use Stitcher API from python.
 # Python 2/3 compatibility
 from __future__ import print_function
 from collections import OrderedDict
-import stitching
+import stitching, image
 import argparse, os
 import cv2 as cv
 import numpy as np
@@ -311,7 +311,7 @@ def stitch(img_names, conf_thresh, match_conf, ft: int):
     is_compose_scale_set = False
 
     for name in img_names:
-        imgObj = stitching.ImgObj(name)
+        imgObj = image.Img(name)
         # full_img = cv.imread(cv.samples.findFile(name))
         if imgObj is None:
             print("Cannot read image ", name)
@@ -339,7 +339,8 @@ def stitch(img_names, conf_thresh, match_conf, ft: int):
         imgObj.image = img
         images.append(imgObj)
 
-    images = stitching.geo_sort(images)
+    # sort before stitching to make stitching easier
+    # images = stitching.geo_sort(images)
 
     matcher = get_matcher(match_conf)
     p = matcher.apply2(features)
@@ -448,9 +449,7 @@ def stitch(img_names, conf_thresh, match_conf, ft: int):
     blender = None
     timelapser = None
 
-    for idx, name in enumerate(img_names):
-        imgObj = stitching.ImgObj(name)
-        # full_img = cv.imread(name)
+    for idx, imgObj in enumerate(images):
         if not is_compose_scale_set:
             if compose_megapix > 0:
                 compose_scale = min(1.0, np.sqrt(compose_megapix * 1e6 / (imgObj.image.shape[0] * imgObj.image.shape[1])))
@@ -514,21 +513,21 @@ def stitch(img_names, conf_thresh, match_conf, ft: int):
         result = None
         result_mask = None
         result, result_mask = blender.blend(result, result_mask)
-        result = cv.resize(result, (0, 0), fx=.85, fy=.85)      # size down
-        try:
-            cv.imwrite(result_name, result)
-            resultObj = stitching.ImgObj(result_name)
-            pos, lat_long = stitching.create_gps(imgObj_used)
-            stitching.modify_exif(resultObj, lat_long=lat_long, pos=pos)
-        except:
-            print("Error: cannot write image")
-            return None
+        result = cv.resize(result, (0, 0), fx=1, fy=1)      # size down
+        cv.imwrite(result_name, result)
+        cv.imshow("result", result)
+        resultObj = image.Img(result_name)
+            # pos, lat_long = stitching.create_gps(imgObj_used)
+            # stitching.modify_exif(resultObj, lat_long=lat_long, pos=pos)
+        # except:
+        #     print("Error: cannot create Img object")
+        #     return None
         zoom_x = 600.0 / result.shape[1]
         dst = cv.normalize(src=result, dst=None, alpha=255., norm_type=cv.NORM_MINMAX, dtype=cv.CV_8U)
         dst = cv.resize(dst, dsize=None, fx=zoom_x, fy=zoom_x)
-        cv.imshow(result_name, dst)
-        print("final stitched image size: ", stitching.format_bytes(os.path.getsize(result_name)))
+        print("final stitched image size:", stitching.format_bytes(os.path.getsize(result_name)))
         cv.waitKey()
 
     print("Done")
+
     return resultObj, result_name, imgObj_used
