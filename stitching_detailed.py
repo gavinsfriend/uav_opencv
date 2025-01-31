@@ -255,9 +255,9 @@ def get_matcher(match_conf):
 
 
 def get_compensator():
-    expos_comp_type = EXPOS_COMP_CHOICES[list(EXPOS_COMP_CHOICES.keys())[0]]
-    expos_comp_nr_feeds = 1
-    expos_comp_block_size = 32
+    expos_comp_type = EXPOS_COMP_CHOICES[list(EXPOS_COMP_CHOICES.keys())[0]]    # default args.expos_comp
+    expos_comp_nr_feeds = 1     # default args.expos_comp_nr_feeds
+    expos_comp_block_size = 32  # default args.expos_comp_block_size
     # expos_comp_nr_filtering = args.expos_comp_nr_filtering
     if expos_comp_type == cv.detail.ExposureCompensator_CHANNELS:
         compensator = cv.detail_ChannelsCompensator(expos_comp_nr_feeds)
@@ -275,21 +275,21 @@ def get_compensator():
 
 def stitch(img_names, conf_thresh, match_conf, ft: int):
     # args = parser.parse_args()
-    # img_names = args.img_names
+    # images = args.images
     print(img_names)
-    work_megapix = 0.6 # args.work_megapix
-    seam_megapix = 0.1 # args.seam_megapix
-    compose_megapix = -1 # args.compose_megapix
+    work_megapix = 0.6      # default args.work_megapix
+    seam_megapix = 0.1      # default args.seam_megapix
+    compose_megapix = -1    # default args.compose_megapix
     # conf_thresh = args.conf_thresh
-    ba_refine_mask = 'xxxxx' # args.ba_refine_mask
-    wave_correct = WAVE_CORRECT_CHOICES[list(WAVE_CORRECT_CHOICES.keys())[0]]
-    save_graph = True
-    warp_type = WARP_CHOICES[0]
-    blend_type = BLEND_CHOICES[0]
-    blend_strength = 5
+    ba_refine_mask = 'xxxxx' # default args.ba_refine_mask
+    wave_correct = WAVE_CORRECT_CHOICES[list(WAVE_CORRECT_CHOICES.keys())[0]]   # default args.wave_correct
+    save_graph = False
+    warp_type = WARP_CHOICES[0]     # default args.warp
+    blend_type = BLEND_CHOICES[0]   # default args.blend
+    blend_strength = 5              # default args.blend_strength
     result_name = "stitchedImg.JPG"
 
-    timelapse_mode = None
+    timelapse_mode = None       # default args.timelapse
     if timelapse_mode is not None:
         timelapse = True
         if timelapse_mode == "as_is":
@@ -313,7 +313,7 @@ def stitch(img_names, conf_thresh, match_conf, ft: int):
     for name in img_names:
         imgObj = image.Img(name)
         # full_img = cv.imread(cv.samples.findFile(name))
-        if imgObj is None:
+        if imgObj.image is None:
             print("Cannot read image ", name)
             exit()
         full_img_sizes.append((imgObj.image.shape[1], imgObj.image.shape[0]))
@@ -346,9 +346,9 @@ def stitch(img_names, conf_thresh, match_conf, ft: int):
     p = matcher.apply2(features)
     matcher.collectGarbage()
 
-    # if save_graph:
-    #     with open(args.save_graph, 'w') as fh:
-    #         fh.write(cv.detail.matchesGraphAsString(img_names, p, conf_thresh))
+    if save_graph:
+        with open(save_graph, 'w') as fh:
+            fh.write(cv.detail.matchesGraphAsString(img_names, p, conf_thresh))
 
     indices = cv.detail.leaveBiggestComponent(features, p, conf_thresh)
     img_subset = []
@@ -358,6 +358,7 @@ def stitch(img_names, conf_thresh, match_conf, ft: int):
         img_names_subset.append(img_names[indices[i]])
         img_subset.append(images[indices[i]])
         full_img_sizes_subset.append(full_img_sizes[indices[i]])
+    # print(f"LINE 363\nimages: {images}\nimg_subset: {img_subset}\nimg_names: {img_names}\nimg_names_subset: {img_names_subset}\n")
     images = img_subset
     img_names = img_names_subset
     full_img_sizes = full_img_sizes_subset
@@ -427,7 +428,7 @@ def stitch(img_names, conf_thresh, match_conf, ft: int):
         K[1, 2] *= swa
         corner, image_wp = warper.warp(images[idx].image, K, cameras[idx].R, cv.INTER_LINEAR, cv.BORDER_REFLECT)
         corners.append(corner)
-        imgObj_used.append(images[idx])     # keep track of images used in the stitching process
+        imgObj_used.append(images[idx])     # keep track of image objects used in the stitching process
         sizes.append((image_wp.shape[1], image_wp.shape[0]))
         images_warped.append(image_wp)
         p, mask_wp = warper.warp(masks[idx], K, cameras[idx].R, cv.INTER_NEAREST, cv.BORDER_CONSTANT)
@@ -449,10 +450,11 @@ def stitch(img_names, conf_thresh, match_conf, ft: int):
     blender = None
     timelapser = None
 
-    for idx, imgObj in enumerate(images):
+    for idx, name in enumerate(img_names):
+        full_img = cv.imread(name)
         if not is_compose_scale_set:
             if compose_megapix > 0:
-                compose_scale = min(1.0, np.sqrt(compose_megapix * 1e6 / (imgObj.image.shape[0] * imgObj.image.shape[1])))
+                compose_scale = min(1.0, np.sqrt(compose_megapix * 1e6 / (full_img.shape[0] * full_img.shape[1])))
             is_compose_scale_set = True
             compose_work_aspect = compose_scale / work_scale
             warped_image_scale *= compose_work_aspect
@@ -468,10 +470,10 @@ def stitch(img_names, conf_thresh, match_conf, ft: int):
                 corners.append(roi[0:2])
                 sizes.append(roi[2:4])
         if abs(compose_scale - 1) > 1e-1:
-            img = cv.resize(src=imgObj.image, dsize=None, fx=compose_scale, fy=compose_scale,
+            img = cv.resize(src=full_img, dsize=None, fx=compose_scale, fy=compose_scale,
                             interpolation=cv.INTER_LINEAR_EXACT)
         else:
-            img = imgObj.image
+            img = full_img
         _img_size = (img.shape[1], img.shape[0])
         K = cameras[idx].K().astype(np.float32)
         corner, image_warped = warper.warp(img, K, cameras[idx].R, cv.INTER_LINEAR, cv.BORDER_REFLECT)
@@ -513,18 +515,17 @@ def stitch(img_names, conf_thresh, match_conf, ft: int):
         result = None
         result_mask = None
         result, result_mask = blender.blend(result, result_mask)
-        result = cv.resize(result, (0, 0), fx=1, fy=1)      # size down
         cv.imwrite(result_name, result)
-        cv.imshow("result", result)
+        zoom_x = 600.0 / result.shape[1]
+        dst = cv.normalize(src=result, dst=None, alpha=255., norm_type=cv.NORM_MINMAX, dtype=cv.CV_8U)
+        dst = cv.resize(dst, dsize=None, fx=zoom_x, fy=zoom_x)
+        cv.imshow("result", dst)
         resultObj = image.Img(result_name)
             # pos, lat_long = stitching.create_gps(imgObj_used)
             # stitching.modify_exif(resultObj, lat_long=lat_long, pos=pos)
         # except:
         #     print("Error: cannot create Img object")
         #     return None
-        zoom_x = 600.0 / result.shape[1]
-        dst = cv.normalize(src=result, dst=None, alpha=255., norm_type=cv.NORM_MINMAX, dtype=cv.CV_8U)
-        dst = cv.resize(dst, dsize=None, fx=zoom_x, fy=zoom_x)
         print("final stitched image size:", stitching.format_bytes(os.path.getsize(result_name)))
         cv.waitKey()
 

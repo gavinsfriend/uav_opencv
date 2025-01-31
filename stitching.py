@@ -32,6 +32,7 @@ def create_gps(imgObjs):
     lat_long = lat, long
     return pos, lat_long
 
+
 # modify exif data of an image
 def modify_exif(imgObj: image.Img, lat_long, pos=None):
     tags = {"pos": pos, "lat_long": lat_long}
@@ -145,7 +146,6 @@ def stitch(paths: str, feature: str):
     print("feature:", feature, ", conf_thresh:", conf_thresh, ", match_conf:", match_conf)
 
     try:
-        # FIXME: stitcher generating split images?
         resultObj, resultName, imgsUsed = stitching_detailed.stitch(image_paths, conf_thresh, match_conf, ft)
         print("new coordinates:", resultObj.lat_long, resultObj.pos)
         return resultObj, resultName, imgsUsed
@@ -157,7 +157,6 @@ def stitch(paths: str, feature: str):
 
 if __name__ == '__main__':
     # cProfile.run('stitch("sift")')
-    # stitch(img_paths, "brisk")
-    img_paths = "../images/imgs/*.*"
+    img_paths = "./imgs/*.*"
     stitch(img_paths, "sift")
 
