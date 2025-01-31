@@ -131,13 +131,13 @@ class Img:
         else:
             return None
 
-    def __init__(self, filepath: str, resize=.7):
+    def __init__(self, filepath: str, resize=1):
         """Initializes an image object with the given path and resize factor.
 
         Args:
         -----
             filepath (str): file path of the image
-            resize (float, optional): resize factor if image size is too big. Defaults to .7. Set to 1 for no resizing.
+            resize (float, optional): resize factor if image size is too big. Set to 1 for no resizing.
         
         Class Attributes:
         -----------------
